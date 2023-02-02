@@ -1,0 +1,120 @@
+//create database
+CREATE DATABASE HOME_TASK;
+
+//use database
+USE DATABASE HOME_TASK;
+
+//create schemas
+CREATE SCHEMA FORMATS;
+CREATE SCHEMA EXTERNAL_STAGES;
+
+//create table JSON
+CREATE TABLE "HOME_TASK"."PUBLIC"."JSON" (
+  "RAW" VARIANT);
+  
+//create table JSON_FORMATTED
+CREATE TABLE "HOME_TASK"."PUBLIC"."JSON_FORMATTED"(
+    "id" INT, 
+    "first_name" STRING, 
+    "last_name" STRING, 
+    "skill" ARRAY,
+    "age" INT, 
+    "department" STRING,
+    "load_timestamp" TIMESTAMP
+);
+
+//create stage
+
+CREATE OR REPLACE STAGE HOME_TASK.EXTERNAL_STAGES.AWS_STATGE_JSON
+url='s3://snowflake-assignments-mc/unstructureddata';
+
+//description of external stage
+DESC STAGE HOME_TASK.EXTERNAL_STAGES.AWS_STATGE_JSON; 
+
+LIST @HOME_TASK.EXTERNAL_STAGES.AWS_STATGE_JSON;
+
+//create json file formart
+CREATE OR REPLACE FILE FORMAT HOME_TASK.FORMATS.JSON_FORMAT
+type='JSON'; 
+//list json file format
+DESC FILE FORMAT HOME_TASK.FORMATS.JSON_FORMAT;
+
+//upload data into JSON table from external stage
+COPY INTO HOME_TASK.PUBLIC.JSON FROM @HOME_TASK.EXTERNAL_STAGES.AWS_STATGE_JSON/Jobskills.json
+file_format= (FORMAT_NAME='HOME_TASK.FORMATS.JSON_FORMAT');
+
+SELECT * FROM HOME_TASK.PUBLIC.JSON;
+
+//parse data from JSON table to match the schema
+SELECT RAW:id::int as id,
+RAW:first_name::string as first_name,
+RAW:last_name::string as last_name,
+RAW:age::int as age,
+RAW:department::string as department
+from HOME_TASK.PUBLIC.JSON;
+
+/*counting the number of skills array
+select RAW:first_name::string as first_name,
+RAW:Skills[0]::string as skill,
+array_size(RAW:Skills)as no_of_skills
+from HOME_TASK.PUBLIC.JSON */
+
+/*handling arrays (trying slicing)
+
+select RAW:first_name::string as first_name,
+RAW:Skills[0]::string as skill
+from HOME_TASK.PUBLIC.JSON
+UNION ALL
+select RAW:first_name::string as first_name,
+RAW:Skills[1]::string as skill
+from HOME_TASK.PUBLIC.JSON
+UNION ALL
+select RAW:first_name::string as first_name,
+RAW:Skills[2]::string as skill
+from HOME_TASK.PUBLIC.JSON;
+*/
+
+//Flattenning json data
+
+SELECT RAW:id::int as id,
+RAW:first_name::string as first_name,
+RAW:last_name::string as last_name,
+RAW:age::int as age,
+RAW:department::string as department,
+f.value::string as skill,
+current_timestamp as load_timestamp
+from HOME_TASK.PUBLIC.JSON, table(flatten(RAW:Skills)) f;
+
+//insert flattened json file into JSON_FORMATTED table
+CREATE OR REPLACE TABLE HOME_TASK.PUBLIC.JSON_FORMATTED AS 
+SELECT RAW:id::int as id,
+RAW:first_name::string as first_name,
+RAW:last_name::string as last_name,
+RAW:age::int as age,
+RAW:department::string as department,
+f.value::string as skill,
+current_timestamp as load_timestamp
+from HOME_TASK.PUBLIC.JSON, table(flatten(RAW:Skills)) f;
+
+//select formatted data from the json formatted table
+SELECT * FROM HOME_TASK.PUBLIC.JSON_FORMATTED;
+
+
+//create users
+CREATE OR REPLACE USER user1 PASSWORD = 'abc123'
+//grant permission
+GRANT ROLE ACCOUNTADMIN TO USER user1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
